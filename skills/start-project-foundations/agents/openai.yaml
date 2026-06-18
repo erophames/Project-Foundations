@@ -1,0 +1,6 @@
+interface:
+  display_name: "Start Project Foundations"
+  short_description: "Language-specific new-project guardrails"
+  default_prompt: "Use $start-project-foundations to choose project structure, style, tools, and verification for a new project."
+policy:
+  allow_implicit_invocation: true

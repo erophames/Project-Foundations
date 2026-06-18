@@ -1,0 +1,9 @@
+{
+  "name": "project-foundations",
+  "description": "Language-specific project foundations for new project starts across major programming ecosystems.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Local developer"
+  },
+  "license": "MIT"
+}

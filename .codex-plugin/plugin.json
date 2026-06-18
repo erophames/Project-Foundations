@@ -1,0 +1,21 @@
+{
+  "name": "project-foundations",
+  "version": "0.1.0",
+  "description": "Language-specific project foundations for new project starts across major programming ecosystems.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Project Foundations",
+    "shortDescription": "New-project language foundations.",
+    "longDescription": "Injects researched style, structure, tooling, and verification guidance for Python, C, C++, Java, C#, JavaScript, TypeScript, Visual Basic, SQL, R, Delphi/Object Pascal, Kotlin, Go, Rust, Bash/Shell, PowerShell, PHP, Swift, Ruby, Dart, Lua, Scala, and Elixir into new-project workflows.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "Write",
+      "Reference"
+    ],
+    "defaultPrompt": "Use project-foundations:start-project-foundations for this new project."
+  }
+}

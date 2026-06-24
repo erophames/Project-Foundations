@@ -2,17 +2,20 @@
 
 Sources:
 - Kotlin coding conventions: https://kotlinlang.org/docs/coding-conventions.html
-- Kotlin Gradle project configuration: https://kotlinlang.org/docs/gradle-configure-project.html
-- Kotlin Gradle best practices: https://kotlinlang.org/docs/gradle-best-practices.html
-- Kotlin JVM console tutorial: https://kotlinlang.org/docs/jvm-get-started.html
+- Maven Kotlin plugin: https://kotlinlang.org/docs/maven.html
+- Kotlin JVM getting started: https://kotlinlang.org/docs/jvm-get-started.html
 - Kotlin Multiplatform: https://kotlinlang.org/docs/multiplatform.html
 - Kotlin coroutines: https://kotlinlang.org/docs/coroutines-overview.html
 - KDoc: https://kotlinlang.org/docs/kotlin-doc.html
-- ktlint: https://pinterest.github.io/ktlint/latest/
+- Ktfmt: https://github.com/facebook/ktfmt
 - detekt: https://detekt.dev/docs/intro/
+- Konsist: https://docs.konsist.lemonappdev.com/
 - JUnit user guide: https://docs.junit.org/current/user-guide/
 - Kotest: https://kotest.io/docs/framework/framework.html
 - Android Kotlin style guide: https://developer.android.com/kotlin/style-guide
+- MVIKotlin: https://github.com/arkivanov/MVIKotlin
+- Orbit MVI: https://github.com/orbit-mvi/orbit-mvi
+- Maven Versions Plugin: https://www.mojohaus.org/versions/versions-maven-plugin/
 
 ## Use This Reference
 
@@ -20,23 +23,24 @@ Apply this reference for Kotlin/JVM libraries, CLIs, backend services, Android p
 
 Default stance:
 
-- Use Gradle with Kotlin DSL (`*.gradle.kts`) for new Kotlin projects.
-- Use standard source sets: `src/main/kotlin` and `src/test/kotlin` for JVM projects.
-- Use Kotlin's official coding conventions as the baseline.
-- Use ktlint for formatting/style and detekt for static analysis/code smell checks.
+- Use Maven with the Kotlin Maven plugin for new Kotlin/JVM projects.
+- Manage all dependency and plugin versions through POM `<properties>`.
+- Use standard Maven source layout: `src/main/kotlin` and `src/test/kotlin` for JVM projects.
+- Enable Kotlin strict mode (`allWarningsAsErrors`) so the compiler rejects suspicious code.
+- Use Ktfmt (Meta's Kotlin formatter) for deterministic formatting enforcement.
+- Use detekt with `buildUponDefaultConfig` for static analysis and code smell checks.
+- Use Konsist for architecture enforcement through executable tests.
 - Use JUnit on the JVM by default; use Kotest when expressive property/data-driven styles are valuable.
 - Keep Android and Multiplatform guidance layered on top of the base Kotlin rules.
+- Use MVIKotlin or Orbit MVI for state management in Android projects.
 
 ## Default Structure
 
-For a Kotlin/JVM library, CLI, or service:
+For a Kotlin/JVM library, CLI, or service with Maven:
 
 ```text
 project-name/
-|-- settings.gradle.kts
-|-- build.gradle.kts
-|-- gradle/
-|   `-- libs.versions.toml
+|-- pom.xml
 |-- src/
 |   |-- main/
 |   |   |-- kotlin/
@@ -55,12 +59,11 @@ For pure Kotlin projects, directory structure should follow the package structur
 
 | Project type | Structure | Notes |
 | --- | --- | --- |
-| JVM library | `src/main/kotlin`, `src/test/kotlin`, Gradle Kotlin DSL | Keep public API deliberate; add KDoc for exported types. |
-| CLI | `src/main/kotlin/.../Main.kt`, application plugin, command runner tests | Keep `main()` thin and test command behavior without spawning every case. |
+| JVM library | `src/main/kotlin`, `src/test/kotlin`, Maven + kotlin-maven-plugin | Keep public API deliberate; add KDoc for exported types. |
+| CLI | `src/main/kotlin/.../Main.kt`, application, command runner tests | Keep `main()` thin and test command behavior without spawning every case. |
 | Backend service | framework defaults plus domain/application packages | Ktor, Spring, Micronaut, and Quarkus can add conventions; keep domain code framework-light. |
 | Android | Android Gradle plugin layout plus Kotlin source sets | Follow Android Kotlin style where it conflicts with general Kotlin style. |
 | Multiplatform | `commonMain`, `commonTest`, platform source sets | Put shared logic in common code and isolate platform APIs behind `expect`/`actual`. |
-| Build logic | `buildSrc` or included build convention plugins | Keep Gradle Kotlin DSL typed, small, and reusable. |
 
 Avoid creating `Utils.kt`, `Helpers.kt`, or `Manager` classes by default. Use names that describe the responsibility: `MoneyFormatter.kt`, `InvoiceParser.kt`, `CustomerRepository.kt`.
 
@@ -104,71 +107,87 @@ Avoid creating `Utils.kt`, `Helpers.kt`, or `Manager` classes by default. Use na
 
 ## Build And Dependency Policy
 
-- Use Gradle Kotlin DSL for new builds.
-- Use a version catalog (`gradle/libs.versions.toml`) when dependency count is non-trivial or the project has multiple modules.
-- Use convention plugins once repeated Gradle configuration appears in more than one module.
-- Pin the JVM toolchain instead of relying on the developer's ambient JDK.
+- Use Maven with the Kotlin Maven plugin for new builds.
+- Manage all dependency and plugin versions through POM `<properties>` so upgrades stay in one place.
+- Enable Kotlin strict mode: configure `allWarningsAsErrors` in the kotlin-maven-plugin so the compiler treats warnings as errors.
+- Pin the JVM target version through the kotlin-maven-plugin `<jvmTarget>` configuration.
 - Keep framework dependencies in boundary modules; core/domain modules should usually depend only on Kotlin/JVM basics.
-- Avoid mixing Maven and Gradle builds unless migration is in progress.
-- For published libraries, configure explicit API, metadata, license, repository, and binary compatibility checks if public API stability matters.
+- Use the versions-maven-plugin to detect outdated dependencies regularly.
+- For published libraries, configure explicit API metadata, license, repository, and binary compatibility checks if public API stability matters.
 
-Starter JVM `build.gradle.kts` shape:
+Starter Maven `pom.xml` shape:
 
-```kotlin
-plugins {
-    kotlin("jvm")
-    application
-}
+```xml
+<properties>
+    <kotlin.version>2.0.20</kotlin.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+</properties>
 
-repositories {
-    mavenCentral()
-}
-
-kotlin {
-    jvmToolchain(21)
-}
-
-dependencies {
-    testImplementation(kotlin("test"))
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-maven-plugin</artifactId>
+            <version>${kotlin.version}</version>
+            <configuration>
+                <jvmTarget>21</jvmTarget>
+                <allWarningsAsErrors>true</allWarningsAsErrors>
+            </configuration>
+        </plugin>
+        <plugin>
+            <groupId>com.facebook</groupId>
+            <artifactId>ktfmt-maven-plugin</artifactId>
+        </plugin>
+        <plugin>
+            <groupId>com.github.gantsign.maven</groupId>
+            <artifactId>detekt-maven-plugin</artifactId>
+        </plugin>
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>versions-maven-plugin</artifactId>
+        </plugin>
+    </plugins>
+</build>
 ```
 
-For real projects, pin plugin and dependency versions through `settings.gradle.kts` plugin management or `gradle/libs.versions.toml`.
+For real projects, pin all plugin versions through `<properties>`.
 
 ## Tooling Defaults
 
-- Formatter/style: ktlint, ideally wired through Gradle.
-- Static analysis: detekt with `buildUponDefaultConfig`.
+- Formatter: Ktfmt (Meta's Kotlin formatter) wired through Maven for deterministic formatting.
+- Static analysis: detekt with `buildUponDefaultConfig` for complexity, code smells, and maintainability checks.
+- Architecture testing: Konsist for enforcing layering, package dependency rules, and naming conventions through executable tests.
+- Compiler strict mode: `allWarningsAsErrors` in the kotlin-maven-plugin so suspicious code fails the build.
 - Tests: JUnit for conservative JVM compatibility; Kotest for richer style/data/property testing.
-- Coverage: Kover or JaCoCo when coverage reporting is needed.
+- Coverage: JaCoCo when coverage reporting is needed.
 - Docs: KDoc plus Dokka for published libraries.
+- Dependency freshness: versions-maven-plugin for update detection.
 - Android: Android Studio formatter and Android Kotlin style where Android-specific rules apply.
 
-Recommended commands:
+Recommended Maven commands:
 
 ```bash
-./gradlew test
-./gradlew ktlintCheck
-./gradlew detekt
-./gradlew build
+./mvnw test
+./mvnw ktfmt:check
+./mvnw detekt:check
+./mvnw verify
+./mvnw versions:display-dependency-updates
 ```
-
-Task names depend on the chosen ktlint/detekt Gradle plugins. Use the project wrapper and check available tasks with `./gradlew tasks`.
 
 ## Quality Gates
 
 | Gate | Command | Purpose |
 | --- | --- | --- |
-| Tests | `./gradlew test` | JVM behavior and regression coverage. |
-| Format/style | `./gradlew ktlintCheck` | Kotlin coding convention enforcement. |
-| Static analysis | `./gradlew detekt` | Complexity, code smells, and maintainability checks. |
-| Build | `./gradlew build` | Compile, test, package, and configured checks. |
-| Docs | `./gradlew dokkaHtml` | Public library documentation when enabled. |
-| Multiplatform | `./gradlew allTests` or target-specific test tasks | Ensures common and platform code compile/test. |
+| Compiler strict mode | kotlin-maven-plugin `allWarningsAsErrors` | Rejects suspicious code at compile time. |
+| Tests | `./mvnw test` | JVM behavior and regression coverage. |
+| Format | `./mvnw ktfmt:check` | Deterministic Ktfmt formatting enforcement. |
+| Static analysis | `./mvnw detekt:check` | Complexity, code smells, and maintainability checks. |
+| Architecture | Konsist test suite (`./mvnw test`) | Layer, package dependency, and naming rule enforcement. |
+| Full verification | `./mvnw verify` | Compile, test, package, and configured checks. |
+| Docs | `./mvnw dokka:dokka` | Public library documentation when enabled. |
+| Dependency freshness | `./mvnw versions:display-dependency-updates` | Detect outdated dependencies. |
+| Multiplatform | target-specific test tasks | Ensures common and platform code compile/test. |
 
 For Android projects, include Android-specific unit/instrumented test tasks and lint. For server projects, add startup/config smoke tests and integration tests for database/HTTP boundaries.
 
@@ -186,6 +205,9 @@ For Android projects, include Android-specific unit/instrumented test tasks and 
 ## Android And Multiplatform Notes
 
 - Android projects should follow Android architecture and lifecycle constraints. Keep UI, ViewModel, domain, and data responsibilities separate.
+- Use MVIKotlin or Orbit MVI for unidirectional state management. Both provide testable state containers that keep business logic out of ViewModels and Fragments.
+  - MVIKotlin suits projects needing full MVI with intent-driven state reduction and Android lifecycle-aware stores.
+  - Orbit MVI suits projects wanting a lightweight MVI container with simpler API and ViewModel integration.
 - Avoid leaking Android framework types into shared/domain modules.
 - In Multiplatform projects, keep `commonMain` free of platform APIs unless wrapped by `expect`/`actual`.
 - Name platform-specific files with source-set suffixes when they contain top-level declarations, for example `Platform.jvm.kt` or `Platform.android.kt`, to avoid duplicate JVM facade class problems.
@@ -194,22 +216,46 @@ For Android projects, include Android-specific unit/instrumented test tasks and 
 ## CI Baseline
 
 ```bash
-./gradlew --version
-./gradlew ktlintCheck
-./gradlew detekt
-./gradlew test
-./gradlew build
+./mvnw --version
+./mvnw ktfmt:check
+./mvnw detekt:check
+./mvnw test
+./mvnw verify
+./mvnw versions:display-dependency-updates
 ```
 
-Use the Gradle wrapper in CI. Cache Gradle dependencies/build cache according to the CI platform. For Android, add lint and instrumented tests only when the CI environment supports the required SDK/emulator setup.
+Cache Maven dependencies according to the CI platform. For Android, add lint and instrumented tests only when the CI environment supports the required SDK/emulator setup.
+
+## Architecture Testing
+
+Use Konsist to enforce architectural rules as executable Kotlin tests that fail the build when violated:
+
+- **Layer dependencies:** domain packages must not import infrastructure or UI framework types.
+- **Package structure:** classes in domain packages must not reside outside expected modules.
+- **Naming conventions:** ViewModels must end in `ViewModel`, repositories in `Repository`.
+- **Framework isolation:** shared/common code must not import Android-specific types.
+
+Konsist tests live alongside regular unit tests in `src/test/kotlin` and run as part of `./mvnw test`. Treat architecture violations as build failures, not warnings.
 
 ## Review Hot Spots
 
 - `!!` and unsafe casts hiding weak boundaries.
 - Platform types from Java APIs treated as non-null without validation.
+- Kotlin strict mode warnings suppressed or downgraded without justification.
 - Coroutine scopes that outlive their owner.
 - `GlobalScope`, blocking calls on main/default dispatchers, and missing cancellation paths.
 - Overuse of `object` singletons for stateful dependencies.
-- Domain logic inside framework controllers, Android activities/fragments, or Gradle build scripts.
+- Domain logic inside framework controllers, Android activities/fragments, or Maven build configuration.
 - Multiplatform abstractions that mirror platform APIs instead of modeling project needs.
 - Tests that only verify mocks rather than Kotlin behavior and state transitions.
+
+## Planning Checklist
+
+- Create `pom.xml` with the Kotlin Maven plugin and `<properties>` for all versions.
+- Enable Kotlin strict mode (`allWarningsAsErrors`).
+- Add `src/main/kotlin` and `src/test/kotlin`.
+- Add first failing JUnit 5 test.
+- Add Ktfmt and detekt checks to local verification.
+- Add Konsist tests for layer and package dependency rules.
+- Add versions-maven-plugin to CI.
+- For Android, choose MVIKotlin or Orbit MVI for state management.

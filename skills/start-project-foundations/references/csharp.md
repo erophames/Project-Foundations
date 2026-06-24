@@ -9,6 +9,16 @@ Sources:
 - .NET code analysis: https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview
 - .NET nullable reference types: https://learn.microsoft.com/en-us/dotnet/csharp/nullable-references
 - .NET testing overview: https://learn.microsoft.com/en-us/dotnet/core/testing/
+- Roslyn Quality Analyzers (CA rules): https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/
+- SonarAnalyzer.CSharp: https://github.com/SonarSource/sonar-dotnet
+- Meziantou.Analyzer: https://github.com/meziantou/Meziantou.Analyzer
+- StyleCop.Analyzers: https://github.com/DotNetAnalyzers/StyleCopAnalyzers
+- Microsoft.CodeAnalysis.NetAnalyzers: https://github.com/dotnet/roslyn-analyzers
+- NetArchTest: https://github.com/BenMorris/NetArchTest
+- PublicApiGenerator: https://github.com/PublicApiGenerator/PublicApiGenerator
+- NuGet auditing: https://learn.microsoft.com/en-us/nuget/concepts/auditing-packages
+- dotnet-project-licenses: https://github.com/tomchav/dotnet-project-licenses
+- Husky.Net: https://alirezanet.github.io/Husky.Net/
 
 ## Use This Reference
 
@@ -20,7 +30,11 @@ Default stance:
 - Put source under `src/` and tests under `tests/`.
 - Enable nullable reference types for new code.
 - Use `.editorconfig` to make formatting and analyzer expectations executable.
+- Enable `TreatWarningsAsErrors` and a mandatory analyzer suite: Roslyn CA rules, Microsoft.CodeAnalysis.NetAnalyzers, SonarAnalyzer.CSharp, Meziantou.Analyzer, and StyleCop.Analyzers.
 - Use `dotnet` CLI commands as the local/CI contract.
+- Use NetArchTest for executable architecture rule enforcement.
+- Use NuGet audit and dotnet-project-licenses for dependency vulnerability and license scanning.
+- Use Husky.Net to run all checks automatically before every git commit.
 
 ## Default Structure
 
@@ -81,6 +95,8 @@ Do not split into `Domain`, `Application`, `Infrastructure`, and `Api` projects 
 
 ## Starter `Directory.Build.props`
 
+Enable `TreatWarningsAsErrors` and reference all mandatory analyzer packages:
+
 ```xml
 <Project>
   <PropertyGroup>
@@ -88,13 +104,21 @@ Do not split into `Domain`, `Application`, `Infrastructure`, and `Api` projects 
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <AnalysisMode>Recommended</AnalysisMode>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <NuGetAudit>true</NuGetAudit>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="9.32.0.97167" />
+    <PackageReference Include="Meziantou.Analyzer" Version="2.0.163" />
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
+  </ItemGroup>
 </Project>
 ```
 
-Adjust `TargetFramework` to the runtime/deployment target. Use LTS or the organization's standard target when available.
+Adjust `TargetFramework` to the runtime/deployment target. Use LTS or the organization's standard target when available. Pin analyzer versions centrally via `Directory.Build.props` so all projects enforce the same rule set.
 
 ## Starter `.editorconfig`
 
@@ -127,9 +151,19 @@ Keep analyzer severity strict enough to be useful, but do not enable noisy rules
 
 - Build: .NET SDK and solution files.
 - Formatting: `.editorconfig` plus `dotnet format`.
-- Analysis: built-in .NET analyzers; add stricter analyzer packages only when useful.
+- Analysis — mandatory analyzer suite (all enforced as errors via `TreatWarningsAsErrors`):
+  - **Roslyn CA rules**: built-in .NET quality analyzers (CAxxxx), enabled at `AllEnabledByDefault`.
+  - **Microsoft.CodeAnalysis.NetAnalyzers**: security, performance, and correctness rules from the Roslyn team.
+  - **SonarAnalyzer.CSharp**: code quality, security hotspot, and bug detection from SonarSource.
+  - **Meziantou.Analyzer**: best-practice and performance rules covering edge cases the others miss.
+  - **StyleCop.Analyzers**: style and documentation enforcement (SAxxxx rules).
+- Architecture testing: NetArchTest for enforcing layering, dependency direction, and naming rules through fluent assertions.
+- API surface: PublicApiGenerator for snapshot-testing the public API to detect unintentional breaking changes.
 - Tests: xUnit, NUnit, or MSTest. xUnit is a conservative default for new libraries; MSTest is fine for Microsoft-heavy teams.
 - Coverage: Coverlet when coverage data is needed.
+- Security: NuGet audit (built-in, `<NuGetAudit>true</NuGetAudit>`) for transitive package vulnerability scanning.
+- License compliance: dotnet-project-licenses for enumerating and verifying dependency licenses.
+- Git hooks: Husky.Net to run all checks automatically before every commit.
 
 Recommended commands:
 
@@ -144,10 +178,13 @@ dotnet format --verify-no-changes
 
 | Gate | Command | Purpose |
 | --- | --- | --- |
-| Restore | `dotnet restore` | Dependency resolution. |
-| Build/analyze | `dotnet build --no-restore -warnaserror` | Compilation, nullable, analyzers. |
+| Restore | `dotnet restore` | Dependency resolution and NuGet audit. |
+| Build/analyze | `dotnet build --no-restore -warnaserror` | Compilation, nullable, all 5 analyzer suites. |
 | Tests | `dotnet test --no-build` | Behavior and regression coverage. |
+| Architecture | NetArchTest suite (runs within `dotnet test`) | Layer, dependency direction, and naming enforcement. |
+| API surface | PublicApiGenerator (runs within `dotnet test`) | Detects unintentional public API changes. |
 | Format | `dotnet format --verify-no-changes` | `.editorconfig` and formatting enforcement. |
+| License scan | `dotnet-project-licenses` | Enumerate and verify dependency licenses. |
 | Pack | `dotnet pack --no-build` | Libraries/packages only. |
 
 For ASP.NET APIs, add at least one application factory/integration smoke test. For CLIs, test exit code and console output.
@@ -184,9 +221,11 @@ For ASP.NET APIs, add at least one application factory/integration smoke test. F
 
 - Prefer built-in .NET libraries before adding packages.
 - Add package references at the narrowest project that needs them.
-- Use central package management only when multiple projects need shared version governance.
+- Use central package management when multiple projects need shared version governance.
 - Keep test helper packages in test projects only.
 - Avoid global service locators and static mutable singletons.
+- Enable NuGet audit and review vulnerability reports on every restore.
+- Run dotnet-project-licenses to verify license compliance before merging new dependencies.
 
 ## CI Baseline
 
@@ -196,9 +235,45 @@ dotnet restore
 dotnet build --no-restore -warnaserror
 dotnet test --no-build
 dotnet format --verify-no-changes
+dotnet-project-licenses -i ProjectName.sln -o license-report.html
 ```
 
-For package projects, add `dotnet pack --no-build`. For apps, add a publish or container build check when deployment depends on it.
+For package projects, add `dotnet pack --no-build`. For apps, add a publish or container build check when deployment depends on it. NuGet audit runs automatically during `dotnet restore` when `<NuGetAudit>true</NuGetAudit>` is set.
+
+## Architecture Testing
+
+Use NetArchTest to enforce architectural rules as fluent assertions that fail the build when violated:
+
+- **Layer dependencies:** domain types must not depend on infrastructure or ASP.NET types.
+- **Dependency direction:** domain projects must not reference data/access projects.
+- **Naming conventions:** controllers must end in `Controller`, services in `Service`.
+- **Framework isolation:** domain classes must not inherit from `ControllerBase`, `DbContext`, or other framework base classes.
+
+NetArchTest assertions live in the test project and run as part of `dotnet test`. Treat architecture violations as build failures, not warnings.
+
+## API Surface Verification
+
+Use PublicApiGenerator to snapshot the public API surface and detect unintentional breaking changes:
+
+- Generate the public API on every build and compare against the committed baseline.
+- Fail the build when the public API changes without an intentional baseline update.
+- This catches accidental visibility changes, removed types, and modified signatures before they ship.
+
+## Security And License Compliance
+
+- Enable NuGet auditing (`<NuGetAudit>true</NuGetAudit>`) for automatic transitive vulnerability scanning during restore.
+- Run dotnet-project-licenses in CI to enumerate all dependency licenses and verify compliance with the project's license policy.
+- Treat known-vulnerable packages as build failures, not warnings.
+- Review the license report for copyleft or restrictive licenses before adding new dependencies.
+
+## Git Hooks With Husky.Net
+
+Use Husky.Net to automate quality checks before code enters the repository:
+
+- Install Husky.Net to run checks on `pre-commit` (format, lint) and `pre-push` (tests, architecture, security).
+- Keep pre-commit hooks fast (format check, analyzer diagnostics) so the developer loop stays responsive.
+- Put heavier checks (full test suite, license scan, NuGet audit) in `pre-push` or CI only.
+- Document the hook setup in the README so new contributors install it on first clone.
 
 ## Review Hot Spots
 
@@ -215,7 +290,14 @@ For package projects, add `dotnet pack --no-build`. For apps, add a publish or c
 - Create solution, source project, and test project.
 - Enable nullable reference types.
 - Add `.editorconfig` for naming and analyzer severity.
+- Add mandatory analyzer suite to `Directory.Build.props`: NetAnalyzers, SonarAnalyzer.CSharp, Meziantou.Analyzer, StyleCop.Analyzers.
+- Set `AnalysisMode=AllEnabledByDefault` and `TreatWarningsAsErrors=true`.
+- Enable NuGet audit (`<NuGetAudit>true</NuGetAudit>`).
 - Add first failing test in the selected test framework.
+- Add NetArchTest assertions for layer and dependency direction rules.
+- Add PublicApiGenerator for public API surface verification.
+- Add dotnet-project-licenses to CI for license compliance.
+- Install Husky.Net for automated pre-commit and pre-push hooks.
 - Add build, test, format, and analyzer checks to verification.
 
 ## Common Mistakes

@@ -10,6 +10,16 @@ Sources:
 - Clippy: https://doc.rust-lang.org/clippy/
 - rustdoc: https://doc.rust-lang.org/rustdoc/
 - RustSec Advisory Database: https://rustsec.org/
+- cargo-deny: https://github.com/EmbarkStudios/cargo-deny
+- cargo-audit: https://github.com/rustsec/rustsec/tree/main/cargo-audit
+- cargo-tarpaulin: https://github.com/xd009642/tarpaulin
+- cargo-machete: https://github.com/bnjbvr/cargo-machete
+- cargo-semver-checks: https://github.com/obi1kenobi/cargo-semver-checks
+- cargo-mutants: https://github.com/sourcefrog/cargo-mutants
+- cargo-geiger: https://github.com/rust-secure-code/cargo-geiger
+- Miri: https://github.com/rust-lang/miri
+- Cargo Nextest: https://nexte.st/
+- Rust-analyzer: https://rust-analyzer.github.io/
 
 ## Use This Reference
 
@@ -20,9 +30,17 @@ Default stance:
 - Use Cargo for all new projects.
 - Start with a single crate unless separate crates have a clear ownership, compile-time, or publication reason.
 - Prefer `src/lib.rs` for testable logic and keep binaries thin.
-- Run rustfmt and Clippy in CI.
+- Run rustfmt and Clippy in every CI build as mandatory gates.
 - Use `Result` and `Option` deliberately instead of panics for expected failure.
-- Avoid `unsafe` by default; when needed, isolate and document invariants.
+- Avoid `unsafe` by default; when needed, isolate and document invariants, and verify with Miri.
+- Run cargo-deny and cargo-audit for dependency security, license, and policy enforcement.
+- Use Cargo Nextest as the primary test runner for faster, more reliable test execution.
+- Run cargo-tarpaulin for coverage measurement.
+- Use cargo-machete to detect unused dependencies.
+- Run cargo-semver-checks for libraries to prevent accidental breaking API changes.
+- Run cargo-mutants for mutation testing to verify test quality.
+- Run cargo-geiger to scan the dependency graph for `unsafe` code.
+- Use rust-analyzer as the IDE LSP for real-time quality feedback.
 
 ## Default Structure
 
@@ -146,20 +164,35 @@ Recommended local commands:
 cargo fmt --all
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
+cargo nextest run --all-features
 cargo test --doc
 cargo build --all-targets --all-features
+cargo tarpaulin --all-features
+cargo machete
+cargo deny check
+cargo audit
+cargo semver-checks check-release  # libraries only
+cargo mutants                       # periodic, not every commit
+cargo geiger                         # periodic, not every commit
 ```
 
-Optional tools:
+Mandatory tools (run in every CI build):
 
-- `cargo audit` or `cargo deny` for dependency vulnerability and policy checks.
-- `cargo nextest` for faster test execution in larger workspaces.
-- `cargo tarpaulin` or `cargo llvm-cov` for coverage when needed.
-- `cargo miri` for undefined-behavior checks around unsafe or tricky code.
-- `cargo semver-checks` for public library release compatibility.
+- `cargo fmt` — formatting enforcement.
+- `cargo clippy` — lint with `-D warnings` so all warnings fail the build.
+- Cargo Nextest — primary test runner, faster and more reliable than `cargo test` for large suites.
+- `cargo deny check` — dependency security vulnerabilities, restrictive licenses, banned/duplicate crates.
+- `cargo audit` — checks `Cargo.lock` against the RustSec Advisory Database for known CVEs.
+- `cargo tarpaulin` — code coverage measurement for Rust.
+- `cargo machete` — finds unused dependencies in `Cargo.toml`.
+- `cargo semver-checks` — ensures public API changes do not break Semantic Versioning (libraries).
+- Miri — detects undefined behavior in `unsafe` code blocks; mandatory when the crate contains `unsafe`.
+- rust-analyzer — IDE LSP for real-time diagnostics, type info, and refactor support.
 
-Add optional tools only when the project has the risk profile or size to justify them.
+Periodic tools (run regularly but not on every commit):
+
+- `cargo mutants` — mutation testing to verify test suite effectiveness.
+- `cargo geiger` — scans the full dependency graph for `unsafe` code usage.
 
 ## Testing And TDD
 
@@ -171,7 +204,7 @@ Add optional tools only when the project has the risk profile or size to justify
 - Test success, failure, boundary values, ownership-sensitive behavior, and serialization/deserialization if present.
 - Prefer deterministic fixtures and temporary directories over global paths.
 - For async code, use the runtime's test attribute consistently and keep timeouts explicit.
-- For unsafe code, add tests for boundary conditions and consider Miri in CI.
+- For unsafe code, add tests for boundary conditions and run Miri in CI to detect undefined behavior.
 - For parsers and protocol handling, add property tests with `proptest` or fuzzing when input space is broad.
 
 ## Quality Gates
@@ -180,11 +213,18 @@ Add optional tools only when the project has the risk profile or size to justify
 | --- | --- | --- |
 | Format | `cargo fmt --all -- --check` | Enforces rustfmt style. |
 | Lint | `cargo clippy --all-targets --all-features -- -D warnings` | Catches common mistakes and maintainability issues. |
-| Tests | `cargo test --all-features` | Runs unit and integration tests. |
+| Tests | `cargo nextest run --all-features` | Faster, more reliable test execution than `cargo test`. |
 | Doc tests | `cargo test --doc` | Verifies public documentation examples. |
 | Build | `cargo build --all-targets --all-features` | Compiles binaries, tests, examples, and feature paths. |
 | Docs | `cargo doc --no-deps --all-features` | Ensures public docs build. |
-| Dependencies | `cargo audit` or `cargo deny check` | Finds known vulnerabilities and policy violations. |
+| Coverage | `cargo tarpaulin --all-features` | Code coverage measurement. |
+| Security (deps) | `cargo deny check` | Vulnerabilities, licenses, banned/duplicate crates. |
+| Security (advisories) | `cargo audit` | Checks Cargo.lock against RustSec Advisory Database. |
+| Unsafe audit | `cargo geiger` | Scans dependency graph for `unsafe` code usage. |
+| Unused deps | `cargo machete` | Finds dependencies in Cargo.toml that are never imported. |
+| SemVer | `cargo semver-checks check-release` | Detects accidental breaking API changes (libraries). |
+| UB detection | `cargo miri test` | Detects undefined behavior in `unsafe` code. |
+| Test quality | `cargo mutants` | Mutation testing to verify test effectiveness. |
 
 For libraries with feature flags, also test default features, no-default-features, and important feature combinations. For embedded/no_std crates, include target-specific checks for supported targets.
 
@@ -195,16 +235,32 @@ rustc --version
 cargo --version
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
+cargo nextest run --all-features
 cargo test --doc
 cargo build --all-targets --all-features
+cargo tarpaulin --all-features
+cargo machete
+cargo deny check
+cargo audit
 ```
 
-Add dependency audit/policy checks where the tool is installed:
+For library crates, add:
 
 ```bash
-cargo audit
-cargo deny check
+cargo semver-checks check-release
+```
+
+For crates with `unsafe` code, add:
+
+```bash
+cargo miri test
+```
+
+Run periodic tools (cargo-mutants, cargo-geiger) on a schedule (nightly/weekly) rather than every commit:
+
+```bash
+cargo mutants
+cargo geiger
 ```
 
 Cache Cargo registry, git, and target directories according to the CI platform. Avoid making CI depend on developer-local toolchain state; use `rust-toolchain.toml` when the project needs a pinned channel or minimum toolchain.
@@ -215,9 +271,11 @@ Cache Cargo registry, git, and target directories according to the CI platform. 
 - If unsafe is required, isolate it in small modules and provide safe wrappers.
 - Document safety invariants on every unsafe function, trait, and block that is not obvious.
 - Validate FFI pointers, lengths, nullability, ownership, and threading assumptions at the boundary.
+- Run Miri on all `unsafe` code to detect undefined behavior in CI.
+- Run cargo-geiger periodically to audit the full dependency graph for `unsafe` code usage.
 - Avoid leaking secrets through `Debug` implementations and logs.
 - Be explicit about integer parsing, overflow expectations, path handling, and untrusted input limits.
-- Track dependency advisories with RustSec-backed tooling for applications and exposed services.
+- Run cargo-deny and cargo-audit in every CI build to track dependency advisories, license violations, and banned crates.
 
 ## Documentation
 
@@ -238,3 +296,18 @@ Cache Cargo registry, git, and target directories according to the CI platform. 
 - Unsafe code without local safety comments and tests around edge cases.
 - Error types that lose source errors or make caller recovery impossible.
 - Tests that exercise implementation details but miss public API behavior.
+
+## Planning Checklist
+
+- Create crate with `cargo new` or `cargo init`.
+- Add `src/lib.rs` for testable logic and keep `main.rs` thin.
+- Add first failing test under `#[cfg(test)] mod tests`.
+- Add rustfmt and Clippy (`-D warnings`) to CI.
+- Add Cargo Nextest as the primary test runner.
+- Add cargo-tarpaulin for coverage.
+- Add cargo-deny and cargo-audit for dependency security.
+- Add cargo-machete for unused dependency detection.
+- Add cargo-semver-checks for library API stability.
+- Configure Miri in CI if the crate contains `unsafe`.
+- Add cargo-mutants and cargo-geiger to periodic CI schedules.
+- Configure rust-analyzer for IDE integration.
